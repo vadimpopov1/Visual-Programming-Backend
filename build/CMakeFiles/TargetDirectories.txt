@@ -1,5 +1,0 @@
-/Users/vadimpopov/Программирование/Visual-Programming-Backend/build/CMakeFiles/imgui.dir
-/Users/vadimpopov/Программирование/Visual-Programming-Backend/build/CMakeFiles/implot.dir
-/Users/vadimpopov/Программирование/Visual-Programming-Backend/build/CMakeFiles/main.dir
-/Users/vadimpopov/Программирование/Visual-Programming-Backend/build/CMakeFiles/edit_cache.dir
-/Users/vadimpopov/Программирование/Visual-Programming-Backend/build/CMakeFiles/rebuild_cache.dir
