@@ -39,7 +39,6 @@ include_directories(${SDL2_INCLUDE_DIRS})
 
 find_package(OpenGL REQUIRED)
 
-# Прямое указание путей ZeroMQ (на основе вашего find)
 set(ZMQ_INCLUDE_DIR "/opt/homebrew/include")
 set(ZMQ_LIBRARY "/opt/homebrew/lib/libzmq.dylib")
 

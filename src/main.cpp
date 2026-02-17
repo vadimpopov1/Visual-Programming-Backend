@@ -176,16 +176,10 @@ void run_server(Location* loc) {
         
         parse_received_data(received_data, loc);
 
-        time_t now = time(0);
-        struct tm* tm_info = localtime(&now);
-        char time_str[30];
-        strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
-
         std::stringstream json_entry;
-        json_entry << "  {\n";
-        json_entry << "    \"received_data\": " << received_data << ",\n";
-        json_entry << "    \"server_time\": \"" << time_str << "\"\n";
-        json_entry << "  }";
+
+        json_entry << "\t{\n\t\"received_data\": " << received_data << "\n\t}";
+
 
         std::string filename = "../database/locations.json";
         
