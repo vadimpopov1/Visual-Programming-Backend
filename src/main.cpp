@@ -32,6 +32,7 @@ struct Location {
     std::atomic<float> longitude;
     std::atomic<float> altitude;
     std::atomic<long long> timestamp;
+    std::string imei;
 };
 
 void parse_received_data(const std::string& data, Location* loc) {
@@ -39,6 +40,7 @@ void parse_received_data(const std::string& data, Location* loc) {
     size_t lon_pos = data.find("\"longitude\"");
     size_t alt_pos = data.find("\"altitude\"");
     size_t ts_pos = data.find("\"timestamp\"");
+    size_t imei_pos = data.find("\"imei\"");
     
     if (lat_pos != std::string::npos) {
         size_t colon_pos = data.find(":", lat_pos);
@@ -68,6 +70,17 @@ void parse_received_data(const std::string& data, Location* loc) {
         if (comma_pos == std::string::npos) comma_pos = data.find("}", colon_pos);
         std::string ts_str = data.substr(colon_pos + 1, comma_pos - colon_pos - 1);
         loc->timestamp.store(std::stoll(ts_str));
+    }
+
+    if (imei_pos != std::string::npos) {
+        size_t colon_pos = data.find(":", imei_pos);
+        size_t comma_pos = data.find(",", colon_pos);
+        if (comma_pos == std::string::npos) comma_pos = data.find("}", colon_pos);
+        std::string imei_str = data.substr(colon_pos + 1, comma_pos - colon_pos - 1);
+        if (imei_str.size() >= 2 && imei_str.front() == '"' && imei_str.back() == '"') {
+            imei_str = imei_str.substr(1, imei_str.size() - 2);
+        }
+        loc->imei = imei_str;
     }
 }
 
@@ -129,6 +142,7 @@ void run_gui(Location* loc) {
         ImGui::Text("Longitude: %.6f°", loc->longitude.load());
         ImGui::Text("Altitude: %.2f meters", loc->altitude.load());
         ImGui::Text("Timestamp %lld", loc->timestamp.load());
+        ImGui::Text("IMEI: %s", loc->imei.c_str());
         ImGui::Separator();
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                     1000.0f / io.Framerate, io.Framerate);
@@ -240,6 +254,7 @@ int main() {
     locationInfo.longitude.store(0.0f);
     locationInfo.altitude.store(0.0f);
     locationInfo.timestamp.store(0);
+    locationInfo.imei = "None";
 
     std::thread server_thread(run_server, &locationInfo);
     
