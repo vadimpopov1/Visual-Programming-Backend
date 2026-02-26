@@ -24,6 +24,7 @@
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_sdl2.h"
 #include "imgui.h"
+#include "implot.h"
 
 #define PORT 5555
 
@@ -31,6 +32,7 @@ struct Location {
     std::atomic<float> latitude;
     std::atomic<float> longitude;
     std::atomic<float> altitude;
+    std::atomic<float> accuracy;
     std::atomic<long long> timestamp;
     std::string imei;
 };
@@ -39,6 +41,7 @@ void parse_received_data(const std::string& data, Location* loc) {
     size_t lat_pos = data.find("\"latitude\"");
     size_t lon_pos = data.find("\"longitude\"");
     size_t alt_pos = data.find("\"altitude\"");
+    size_t acc_pos = data.find("\"accuracy\"");
     size_t ts_pos = data.find("\"timestamp\"");
     size_t imei_pos = data.find("\"imei\"");
     
@@ -62,6 +65,14 @@ void parse_received_data(const std::string& data, Location* loc) {
         if (comma_pos == std::string::npos) comma_pos = data.find("}", colon_pos);
         std::string alt_str = data.substr(colon_pos + 1, comma_pos - colon_pos - 1);
         loc->altitude.store(std::stof(alt_str));
+    }
+
+    if (acc_pos != std::string::npos) {
+        size_t colon_pos = data.find(":", acc_pos);
+        size_t comma_pos = data.find(",", colon_pos);
+        if (comma_pos == std::string::npos) comma_pos = data.find("}", colon_pos);
+        std::string acc_str = data.substr(colon_pos + 1, comma_pos - colon_pos - 1);
+        loc->accuracy.store(std::stof(acc_str));
     }
 
     if (ts_pos != std::string::npos) {
@@ -111,13 +122,26 @@ void run_gui(Location* loc) {
         std::cerr << "Failed to initialize GLEW\n";
         return;
     }
-
+    
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImPlot::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-    ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 10.0f;
+    style.ChildRounding = 8.0f;
+    style.FrameRounding = 6.0f;
+    style.PopupRounding = 8.0f;
+    style.ScrollbarRounding = 12.0f;
+    style.GrabRounding = 8.0f;
+    style.TabRounding = 8.0f;
+    style.WindowTitleAlign = ImVec2(-0.1f, 0.5f);
+    style.WindowPadding = ImVec2(15, 15);
+    style.ItemSpacing = ImVec2(5, 5);
+    style.FramePadding = ImVec2(6, 4);
+    // ImGui::StyleColorsDark(); 
 
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -136,32 +160,54 @@ void run_gui(Location* loc) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
-
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.7f));
         ImGui::Begin("Location Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         ImGui::Text("Latitude: %.6f°", loc->latitude.load());
         ImGui::Text("Longitude: %.6f°", loc->longitude.load());
-        ImGui::Text("Altitude: %.2f meters", loc->altitude.load());
+        ImGui::Text("Altitude: %.6f", loc->altitude.load());
+        ImGui::Text("Accuracy: %.6f", loc->accuracy.load());
         ImGui::Text("Timestamp %lld", loc->timestamp.load());
         ImGui::Text("IMEI: %s", loc->imei.c_str());
         ImGui::Separator();
         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
                     1000.0f / io.Framerate, io.Framerate);
-        ImGui::End();
 
+        ImGui::Spacing();
+        // Временная заглушка графика для тестов, в будушем будет переделана в рабочую версию
+        static float xs1[1001], ys1[1001];
+        for (int i = 0; i < 1001; ++i) {
+            xs1[i] = i * 0.001f;
+            ys1[i] = 0.5f + 0.5f * sinf(50 * (xs1[i] + (float)ImGui::GetTime() / 10));
+        }
+        static double xs2[20], ys2[20];
+        for (int i = 0; i < 20; ++i) {
+            xs2[i] = i * 1/19.0f;
+            ys2[i] = xs2[i] * xs2[i];
+        }
+        if (ImPlot::BeginPlot("Line Plots")) {
+            ImPlot::SetupAxes("x","y");
+            ImPlot::PlotLine("f(x)", xs1, ys1, 1001);
+            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+            ImPlot::PlotLine("g(x)", xs2, ys2, 20,ImPlotLineFlags_Segments);
+            ImPlot::EndPlot();
+        }
+
+        ImGui::End();
+        ImGui::PopStyleColor();
         ImGui::Render();
-        
+
         int display_w, display_h;
         SDL_GetWindowSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
-        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        
+        glClearColor(0.1f, 0.1f, 0.1f, 0.7f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         SDL_GL_SwapWindow(window);
     }
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
+    ImPlot::DestroyContext();
     ImGui::DestroyContext();
 
     SDL_GL_DeleteContext(gl_context);
@@ -193,8 +239,7 @@ void run_server(Location* loc) {
         std::stringstream json_entry;
 
         json_entry << "\t{\n\t\"received_data\": " << received_data << "\n\t}";
-
-
+        
         std::string filename = "../database/locations.json";
         
         std::ifstream check_file(filename);
@@ -207,6 +252,7 @@ void run_server(Location* loc) {
             if (!file_exists) {
                 file << "[\n";
                 file << json_entry.str() << "\n";
+                file << "\n]";
             } else {
                 std::ifstream read_file(filename);
                 std::stringstream content;
@@ -238,11 +284,9 @@ void run_server(Location* loc) {
             }
             file.close();
             
-            std::string response = "Successful sending";
-            socket.send(zmq::buffer(response), zmq::send_flags::none);
+            socket.send(zmq::buffer("Successful sending"), zmq::send_flags::none);
         } else {
-            std::string response = "Unexpected error";
-            socket.send(zmq::buffer(response), zmq::send_flags::none);
+            socket.send(zmq::buffer("Unexpected error"), zmq::send_flags::none);
         }
     }
 }
@@ -253,12 +297,13 @@ int main() {
     locationInfo.latitude.store(0.0f);
     locationInfo.longitude.store(0.0f);
     locationInfo.altitude.store(0.0f);
+    locationInfo.accuracy.store(0.0f);
     locationInfo.timestamp.store(0);
     locationInfo.imei = "None";
 
     std::thread server_thread(run_server, &locationInfo);
     
-    run_gui(&locationInfo);
+    run_gui(&locationInfo); // Нельзя создать отдельный потом для GUI тк в MacOS поток для графики должен быть в главном.
 
     server_thread.join();
 
