@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <zmq.hpp>
+#include <map>
 
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_sdl2.h"
@@ -37,14 +38,38 @@ struct Location {
     std::string imei;
 };
 
-void parse_received_data(const std::string& data, Location* loc) {
+struct CellSignalStrength {
+    // lte
+    std::atomic<int> level;
+    std::atomic<int> cqi;
+    std::atomic<int> rsrp;
+    std::atomic<int> rsrq;
+    std::atomic<int> rssi;
+    std::atomic<int> rssnr;
+    // nr
+    std::atomic<int> ssrsrp;
+    std::atomic<int> ssrsrq;
+    std::atomic<int> sssinr;
+    std::atomic<int> timingadvancenr;
+};
+
+struct CellSignalStrengthData {
+    std::vector<double> rsrp;
+    std::vector<double> rsrq;
+    std::vector<double> rssi;
+    std::vector<double> timestamp;
+};
+
+CellSignalStrengthData CellData = CellSignalStrengthData{};
+
+void parse_received_data(const std::string& data, Location* loc, CellSignalStrength* signal) {
     size_t lat_pos = data.find("\"latitude\"");
     size_t lon_pos = data.find("\"longitude\"");
     size_t alt_pos = data.find("\"altitude\"");
     size_t acc_pos = data.find("\"accuracy\"");
     size_t ts_pos = data.find("\"timestamp\"");
     size_t imei_pos = data.find("\"imei\"");
-    
+
     if (lat_pos != std::string::npos) {
         size_t colon_pos = data.find(":", lat_pos);
         size_t comma_pos = data.find(",", colon_pos);
@@ -93,9 +118,51 @@ void parse_received_data(const std::string& data, Location* loc) {
         }
         loc->imei = imei_str;
     }
-}
 
-void run_gui(Location* loc) {
+    size_t cell_pos = data.find("\"cellInfoList\"");
+    if (cell_pos == std::string::npos) return;
+
+    size_t colon_pos = data.find(":", cell_pos);
+    if (colon_pos == std::string::npos) return;
+
+    size_t quote_start = data.find("\"", colon_pos + 1);
+    if (quote_start == std::string::npos) return;
+    size_t quote_end = data.find("\"", quote_start + 1);
+    if (quote_end == std::string::npos) return;
+    std::string cell_info_str = data.substr(quote_start + 1, quote_end - quote_start - 1);
+
+    auto extract_int = [&](const std::string& key) -> int {
+        size_t key_pos = cell_info_str.find(key);
+        if (key_pos == std::string::npos) return -1;
+        size_t eq_pos = cell_info_str.find("=", key_pos);
+        if (eq_pos == std::string::npos) return -1;
+        size_t num_start = cell_info_str.find_first_not_of(" \t", eq_pos + 1);
+        if (num_start == std::string::npos) return -1;
+        size_t num_end = cell_info_str.find_first_of(" \t,}]", num_start);
+        if (num_end == std::string::npos) num_end = cell_info_str.length();
+        std::string num_str = cell_info_str.substr(num_start, num_end - num_start);
+        try {
+            return std::stoi(num_str);
+        } catch (...) {
+            return -1;
+        }
+    };
+
+    if (cell_info_str.find("CellInfoNr") != std::string::npos) {
+        signal->ssrsrp.store(extract_int("ssRsrp"));
+        signal->ssrsrq.store(extract_int("ssRsrq"));
+        signal->sssinr.store(extract_int("ssSinr"));
+    }
+    else if (cell_info_str.find("CellInfoLte") != std::string::npos) {
+        signal->level.store(extract_int("level"));
+        signal->cqi.store(extract_int("cqi"));
+        signal->rsrp.store(extract_int("rsrp"));
+        signal->rsrq.store(extract_int("rsrq"));
+        signal->rssi.store(extract_int("rssi"));
+        signal->rssnr.store(extract_int("rssnr"));
+    }
+}
+void run_gui(Location* loc, CellSignalStrength* signal) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
         return;
@@ -126,6 +193,10 @@ void run_gui(Location* loc) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImPlot::CreateContext();
+    ImPlot::StyleColorsDark();
+    ImPlotStyle& plot_style = ImPlot::GetStyle();
+    plot_style.PlotDefaultSize = ImVec2(800, 400);
+    plot_style.Colors[ImPlotCol_FrameBg] = ImVec4(0.1f, 0.1f, 0.1f, 0.7f);
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
@@ -160,40 +231,74 @@ void run_gui(Location* loc) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
+
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.7f));
-        ImGui::Begin("Location Info", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::Text("Latitude: %.6f°", loc->latitude.load());
-        ImGui::Text("Longitude: %.6f°", loc->longitude.load());
+
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, io.DisplaySize.y));
+        ImGui::Begin("Main Dashboard", nullptr, 
+            ImGuiWindowFlags_NoTitleBar | 
+            ImGuiWindowFlags_NoResize | 
+            ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+        float left_panel_width = io.DisplaySize.x * 0.2f;
+        ImGui::BeginChild("Left Panel", ImVec2(left_panel_width, 0), true);
+        ImGui::Text("LOCATION INFO");
+        ImGui::Separator();
+        ImGui::Text("Latitude: %.6f", loc->latitude.load());
+        ImGui::Text("Longitude: %.6f", loc->longitude.load());
         ImGui::Text("Altitude: %.6f", loc->altitude.load());
         ImGui::Text("Accuracy: %.6f", loc->accuracy.load());
-        ImGui::Text("Timestamp %lld", loc->timestamp.load());
+        ImGui::Text("Timestamp: %lld", loc->timestamp.load());
         ImGui::Text("IMEI: %s", loc->imei.c_str());
-        ImGui::Separator();
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-                    1000.0f / io.Framerate, io.Framerate);
 
         ImGui::Spacing();
-        // Временная заглушка графика для тестов, в будушем будет переделана в рабочую версию
-        static float xs1[1001], ys1[1001];
-        for (int i = 0; i < 1001; ++i) {
-            xs1[i] = i * 0.001f;
-            ys1[i] = 0.5f + 0.5f * sinf(50 * (xs1[i] + (float)ImGui::GetTime() / 10));
-        }
-        static double xs2[20], ys2[20];
-        for (int i = 0; i < 20; ++i) {
-            xs2[i] = i * 1/19.0f;
-            ys2[i] = xs2[i] * xs2[i];
-        }
-        if (ImPlot::BeginPlot("Line Plots")) {
-            ImPlot::SetupAxes("x","y");
-            ImPlot::PlotLine("f(x)", xs1, ys1, 1001);
-            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-            ImPlot::PlotLine("g(x)", xs2, ys2, 20,ImPlotLineFlags_Segments);
+        ImGui::Spacing();
+        ImGui::Text("CELL SIGNAL LTE");
+        ImGui::Separator();
+        ImGui::Text("Level: %d", signal->level.load());
+        ImGui::Text("CQI: %d", signal->cqi.load());
+        ImGui::Text("RSRP: %d", signal->rsrp.load());
+        ImGui::Text("RSRQ: %d", signal->rsrq.load());
+        ImGui::Text("RSSI: %d", signal->rssi.load());
+        ImGui::Text("RSSNR: %d", signal->rssnr.load());
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Text("Application average:\n%.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+        ImGui::EndChild();
+
+        ImGui::SameLine();
+        ImGui::BeginChild("Right Panel", ImVec2(0, 0), true);
+        ImGui::Text("SIGNAL GRAPH");
+        ImGui::Separator();
+
+        if (ImPlot::BeginPlot("Signal Strength", ImVec2(-1, -1))) {
+            ImPlot::SetupAxes("Time", "dBm", ImPlotAxisFlags_None, ImPlotAxisFlags_None);
+            
+            ImPlot::SetupAxisLimits(ImAxis_Y1, -200, 0, ImPlotCond_Always);
+            
+            if (!CellData.timestamp.empty()) {
+                ImPlot::SetupAxisLimits(ImAxis_X1, CellData.timestamp.front(), CellData.timestamp.back(), ImPlotCond_Always);
+            }
+            
+            if (!CellData.timestamp.empty()) {
+                ImPlot::PlotLine("RSRP", CellData.timestamp.data(), CellData.rsrp.data(), (int)CellData.timestamp.size());
+                ImPlot::PlotLine("RSRQ", CellData.timestamp.data(), CellData.rsrq.data(), (int)CellData.timestamp.size());
+                ImPlot::PlotLine("RSSI", CellData.timestamp.data(), CellData.rssi.data(), (int)CellData.timestamp.size());
+            }
+            
             ImPlot::EndPlot();
         }
 
+        ImGui::EndChild();
         ImGui::End();
+
         ImGui::PopStyleColor();
+
         ImGui::Render();
 
         int display_w, display_h;
@@ -215,7 +320,7 @@ void run_gui(Location* loc) {
     SDL_Quit();
 }
 
-void run_server(Location* loc) {
+void run_server(Location* loc, CellSignalStrength* signal) {
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_REP);
     
@@ -234,7 +339,12 @@ void run_server(Location* loc) {
         
         std::string received_data(static_cast<char*>(request.data()), request.size());
         
-        parse_received_data(received_data, loc);
+        parse_received_data(received_data, loc, signal);
+
+        CellData.rsrp.push_back(static_cast<double>(signal->rsrp.load()));
+        CellData.rsrq.push_back(static_cast<double>(signal->rsrq.load()));
+        CellData.rssi.push_back(static_cast<double>(signal->rssi.load()));
+        CellData.timestamp.push_back(static_cast<double>(loc->timestamp.load()));
 
         std::stringstream json_entry;
 
@@ -293,7 +403,9 @@ void run_server(Location* loc) {
 
 int main() {
     Location locationInfo;
+    CellSignalStrength CellSignalStrengthInfo;
 
+    // location stock
     locationInfo.latitude.store(0.0f);
     locationInfo.longitude.store(0.0f);
     locationInfo.altitude.store(0.0f);
@@ -301,9 +413,21 @@ int main() {
     locationInfo.timestamp.store(0);
     locationInfo.imei = "None";
 
-    std::thread server_thread(run_server, &locationInfo);
+    // cellsignal stock
+    CellSignalStrengthInfo.level.store(0);
+    CellSignalStrengthInfo.cqi.store(0);
+    CellSignalStrengthInfo.rsrp.store(0);
+    CellSignalStrengthInfo.rsrq.store(0);
+    CellSignalStrengthInfo.rssi.store(0);
+    CellSignalStrengthInfo.rssnr.store(0);
+    CellSignalStrengthInfo.ssrsrp.store(0);
+    CellSignalStrengthInfo.ssrsrq.store(0);
+    CellSignalStrengthInfo.sssinr.store(0);
+    CellSignalStrengthInfo.timingadvancenr.store(0);
+
+    std::thread server_thread(run_server, &locationInfo, &CellSignalStrengthInfo);
     
-    run_gui(&locationInfo); // Нельзя создать отдельный потом для GUI тк в MacOS поток для графики должен быть в главном.
+    run_gui(&locationInfo, &CellSignalStrengthInfo); // Нельзя создать отдельный потом для GUI тк в MacOS поток для графики должен быть в главном.
 
     server_thread.join();
 
