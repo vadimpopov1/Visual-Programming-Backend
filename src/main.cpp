@@ -47,6 +47,7 @@ struct Location {
 };
 
 struct CellSignalStrength {
+    std::string cellInfoList;
     // lte
     std::atomic<int> level;
     std::atomic<int> cqi;
@@ -70,7 +71,7 @@ struct CellSignalStrengthData {
 
 CellSignalStrengthData CellData = CellSignalStrengthData{};
 
-void parse_received_data(const std::string& data, Location* loc, CellSignalStrength* signal) {
+void parse_data(const std::string& data, Location* loc, CellSignalStrength* signal) {
     size_t lat_pos = data.find("\"latitude\"");
     size_t lon_pos = data.find("\"longitude\"");
     size_t alt_pos = data.find("\"altitude\"");
@@ -169,7 +170,10 @@ void parse_received_data(const std::string& data, Location* loc, CellSignalStren
         signal->rssi.store(extract_int("rssi"));
         signal->rssnr.store(extract_int("rssnr"));
     }
+    
+    signal->cellInfoList = cell_info_str;
 }
+
 void run_gui(Location* loc, CellSignalStrength* signal) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         std::cerr << "SDL_Init Error: " << SDL_GetError() << std::endl;
@@ -334,7 +338,7 @@ void db_add_data(Location *loc, CellSignalStrength *signal) {
 
     pqxx::work tx(c);
     tx.exec_params("INSERT INTO location (latitude, longitude, altitude, accuracy, timestamp, imei, cellinfolist) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-    loc->latitude.load(), loc->longitude.load(), loc->altitude.load(), loc->accuracy.load(), loc->timestamp.load(), loc->imei.c_str(), "");
+    loc->latitude.load(), loc->longitude.load(), loc->altitude.load(), loc->accuracy.load(), loc->timestamp.load(), loc->imei.c_str(), signal->cellInfoList.c_str());
     tx.commit();
 }
 
@@ -357,7 +361,7 @@ void run_server(Location* loc, CellSignalStrength* signal) {
         
         std::string received_data(static_cast<char*>(request.data()), request.size());
         
-        parse_received_data(received_data, loc, signal);
+        parse_data(received_data, loc, signal);
 
         CellData.rsrp.push_back(static_cast<double>(signal->rsrp.load()));
         CellData.rsrq.push_back(static_cast<double>(signal->rsrq.load()));
