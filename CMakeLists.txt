@@ -52,8 +52,22 @@ else()
     message(FATAL_ERROR "ZeroMQ not found. Install with: brew install zmq cppzmq")
 endif()
 
+# PostgreSQL libpqxx
+set(PQXX_INCLUDE_DIR "/opt/homebrew/include")
+set(PQXX_LIBRARY "/opt/homebrew/lib/libpqxx.dylib")
+
+if(EXISTS ${PQXX_INCLUDE_DIR}/pqxx/pqxx)
+    set(PQXX_FOUND TRUE)
+    set(PQXX_INCLUDE_DIRS ${PQXX_INCLUDE_DIR})
+    set(PQXX_LIBRARIES ${PQXX_LIBRARY})
+    message(STATUS "Found libpqxx: ${PQXX_LIBRARY}")
+    message(STATUS "libpqxx Include: ${PQXX_INCLUDE_DIR}")
+else()
+    message(FATAL_ERROR "libpqxx not found. Install with: brew install libpqxx")
+endif()
+
 include_directories(${INCLUDE_DIR})
-include_directories(${GLEW_INCLUDE_DIRS} ${OPENGL_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIRS})
+include_directories(${GLEW_INCLUDE_DIRS} ${OPENGL_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIRS} ${PQXX_INCLUDE_DIRS})
 
 add_library(imgui STATIC
     ${THIRD_PARTY_DIR}/imgui/imgui.cpp
@@ -93,6 +107,7 @@ if(APPLE)
         ${IOKIT_LIBRARY}
         ${COREVIDEO_LIBRARY}
         ${ZMQ_LIBRARIES}
+        ${PQXX_LIBRARIES}
         pthread
         dl
     )
@@ -108,6 +123,7 @@ else()
         ${GLEW_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${ZMQ_LIBRARIES}
+        ${PQXX_LIBRARIES}
         pthread
         dl
     )
@@ -118,4 +134,5 @@ target_include_directories(main PRIVATE
     ${SDL2_INCLUDE_DIRS}
     ${INCLUDE_DIR}
     ${ZMQ_INCLUDE_DIRS}
+    ${PQXX_INCLUDE_DIRS}
 )

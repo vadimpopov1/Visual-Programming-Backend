@@ -22,12 +22,20 @@
 #include <zmq.hpp>
 #include <map>
 
+#include <pqxx/pqxx>
+
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_sdl2.h"
 #include "imgui.h"
 #include "implot.h"
 
 #define PORT 5555
+
+#define HOST "localhost"
+#define DB_PORT "5432"
+#define DB_NAME "location_db"
+#define DB_USER "vadimpopov"              
+#define DB_USER_PASSWORD "postgres" 
 
 struct Location {
     std::atomic<float> latitude;
@@ -320,6 +328,16 @@ void run_gui(Location* loc, CellSignalStrength* signal) {
     SDL_Quit();
 }
 
+void db_add_data(Location *loc, CellSignalStrength *signal) {
+    const char* info = "host=" HOST " port=" DB_PORT " dbname=" DB_NAME " user=" DB_USER " password=" DB_USER_PASSWORD;
+    pqxx::connection c(info);
+
+    pqxx::work tx(c);
+    tx.exec_params("INSERT INTO location (latitude, longitude, altitude, accuracy, timestamp, imei, cellinfolist) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    loc->latitude.load(), loc->longitude.load(), loc->altitude.load(), loc->accuracy.load(), loc->timestamp.load(), loc->imei.c_str(), "");
+    tx.commit();
+}
+
 void run_server(Location* loc, CellSignalStrength* signal) {
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_REP);
@@ -345,6 +363,8 @@ void run_server(Location* loc, CellSignalStrength* signal) {
         CellData.rsrq.push_back(static_cast<double>(signal->rsrq.load()));
         CellData.rssi.push_back(static_cast<double>(signal->rssi.load()));
         CellData.timestamp.push_back(static_cast<double>(loc->timestamp.load()));
+
+        db_add_data(loc, signal);
 
         std::stringstream json_entry;
 
