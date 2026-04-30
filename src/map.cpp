@@ -222,7 +222,7 @@ void DrawMapTab()
         fetcher_ready = true;
     }
 
-    const ImPlotRect view  = ImPlot::GetPlotLimits();
+    const ImPlotRect view = ImPlot::GetPlotLimits();
     const int zoom = std::clamp(
         static_cast<int>(-std::log(view.X.Max - view.X.Min) * 1.3 + 12), 4, 19);
 
@@ -269,8 +269,8 @@ void DrawMapTab()
             if (tile.tex_id != 0)
                 ImPlot::PlotImage(("##t_" + key).c_str(),
                     static_cast<ImTextureID>(tile.tex_id),
-                    {TileXToLon(tx,     zoom), TileYToMercY(ty + 1, zoom)},
-                    {TileXToLon(tx + 1, zoom), TileYToMercY(ty,     zoom)},
+                    {TileXToLon(tx, zoom), TileYToMercY(ty + 1, zoom)},
+                    {TileXToLon(tx + 1, zoom), TileYToMercY(ty, zoom)},
                     {0, 0}, {1, 1}, {1, 1, 1, 1});
         }
     }
@@ -279,7 +279,7 @@ void DrawMapTab()
     static float last_load_time = 0.0f;
     const float now = ImGui::GetTime();
     if (now - last_load_time > 5.0f) {
-        map_points    = db_load_points();
+        map_points = db_load_points();
         last_load_time = now;
     }
     DrawMapPoints(map_points, zoom);
@@ -298,7 +298,7 @@ void DrawMapPoints(const std::vector<MapPoint>& points, int zoom)
     for (const auto& p : points)
     {
         const double merc_y = LatToMercatorY(p.lat);
-        const ImVec4 color  = RssiToColor(p.rssi);
+        const ImVec4 color = RssiToColor(p.rssi);
 
         ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, 6.0f, color, 1.0f, color);
         double x = p.lon, y = merc_y;

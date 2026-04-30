@@ -52,19 +52,19 @@ void parse_data(const std::string& data, Location* loc, CellSignalStrength* sign
         return val;
     };
 
-    if (auto v = extract_float("latitude"))   loc->latitude.store(*v);
-    if (auto v = extract_float("longitude"))  loc->longitude.store(*v);
-    if (auto v = extract_float("altitude"))   loc->altitude.store(*v);
-    if (auto v = extract_float("accuracy"))   loc->accuracy.store(*v);
-    if (auto v = extract_llong("timestamp"))  loc->timestamp.store(*v);
-    if (auto v = extract_string("imei"))      loc->imei = *v;
+    if (auto v = extract_float("latitude")) loc->latitude.store(*v);
+    if (auto v = extract_float("longitude")) loc->longitude.store(*v);
+    if (auto v = extract_float("altitude")) loc->altitude.store(*v);
+    if (auto v = extract_float("accuracy")) loc->accuracy.store(*v);
+    if (auto v = extract_llong("timestamp")) loc->timestamp.store(*v);
+    if (auto v = extract_string("imei")) loc->imei = *v;
 
     size_t cell_pos = data.find("\"cellInfoList\"");
     if (cell_pos == std::string::npos) return;
 
-    size_t colon_pos  = data.find(":",  cell_pos);  if (colon_pos  == std::string::npos) return;
+    size_t colon_pos = data.find(":", cell_pos);  if (colon_pos == std::string::npos) return;
     size_t quote_start = data.find("\"", colon_pos + 1); if (quote_start == std::string::npos) return;
-    size_t quote_end   = data.find("\"", quote_start + 1); if (quote_end == std::string::npos) return;
+    size_t quote_end = data.find("\"", quote_start + 1); if (quote_end == std::string::npos) return;
 
     std::string cell_info_str = data.substr(quote_start + 1, quote_end - quote_start - 1);
 
@@ -179,7 +179,7 @@ static void append_json_entry(const std::string& filename, const std::string& en
 void run_server(Location* loc, CellSignalStrength* signal)
 {
     zmq::context_t context(1);
-    zmq::socket_t  socket(context, ZMQ_REP);
+    zmq::socket_t socket(context, ZMQ_REP);
     socket.bind("tcp://*:" + std::to_string(ZMQ_PORT));
 
     std::filesystem::create_directories("../database");
@@ -198,7 +198,7 @@ void run_server(Location* loc, CellSignalStrength* signal)
 
         db_add_data(loc, signal);
 
-        const std::string entry    = "\t{\n\t\"received_data\": " + received_data + "\n\t}";
+        const std::string entry = "\t{\n\t\"received_data\": " + received_data + "\n\t}";
         const std::string filename = "../database/locations.json";
 
         append_json_entry(filename, entry);

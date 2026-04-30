@@ -19,7 +19,7 @@ void run_gui(Location* loc, CellSignalStrength* signal)
         return;
     }
 
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,        0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -45,24 +45,24 @@ void run_gui(Location* loc, CellSignalStrength* signal)
     ImPlot::StyleColorsDark();
 
     ImPlotStyle& plot_style = ImPlot::GetStyle();
-    plot_style.PlotDefaultSize         = ImVec2(800, 400);
+    plot_style.PlotDefaultSize = ImVec2(800, 400);
     plot_style.Colors[ImPlotCol_FrameBg] = ImVec4(0.1f, 0.1f, 0.1f, 0.7f);
 
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding    = 10.0f;
-    style.ChildRounding     = 8.0f;
-    style.FrameRounding     = 6.0f;
-    style.PopupRounding     = 8.0f;
+    style.WindowRounding = 10.0f;
+    style.ChildRounding = 8.0f;
+    style.FrameRounding = 6.0f;
+    style.PopupRounding = 8.0f;
     style.ScrollbarRounding = 12.0f;
-    style.GrabRounding      = 8.0f;
-    style.TabRounding       = 8.0f;
-    style.WindowTitleAlign  = ImVec2(-0.1f, 0.5f);
-    style.WindowPadding     = ImVec2(15, 15);
-    style.ItemSpacing       = ImVec2(5, 5);
-    style.FramePadding      = ImVec2(6, 4);
+    style.GrabRounding = 8.0f;
+    style.TabRounding = 8.0f;
+    style.WindowTitleAlign = ImVec2(-0.1f, 0.5f);
+    style.WindowPadding = ImVec2(15, 15);
+    style.ItemSpacing = ImVec2(5, 5);
+    style.FramePadding = ImVec2(6, 4);
 
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -87,8 +87,8 @@ void run_gui(Location* loc, CellSignalStrength* signal)
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x, io.DisplaySize.y));
         ImGui::Begin("Main Dashboard", nullptr,
-            ImGuiWindowFlags_NoTitleBar   | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoMove       | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoBringToFrontOnFocus);
 
         if (ImGui::BeginTabBar("##MainTabs"))
@@ -100,21 +100,21 @@ void run_gui(Location* loc, CellSignalStrength* signal)
 
                 ImGui::Text("LOCATION INFO");
                 ImGui::Separator();
-                ImGui::Text("Latitude:  %.6f", loc->latitude.load());
+                ImGui::Text("Latitude: %.6f", loc->latitude.load());
                 ImGui::Text("Longitude: %.6f", loc->longitude.load());
-                ImGui::Text("Altitude:  %.6f", loc->altitude.load());
-                ImGui::Text("Accuracy:  %.6f", loc->accuracy.load());
-                ImGui::Text("Timestamp: %lld",  loc->timestamp.load());
-                ImGui::Text("IMEI:      %s",    loc->imei.c_str());
+                ImGui::Text("Altitude: %.6f", loc->altitude.load());
+                ImGui::Text("Accuracy: %.6f", loc->accuracy.load());
+                ImGui::Text("Timestamp: %lld", loc->timestamp.load());
+                ImGui::Text("IMEI: %s", loc->imei.c_str());
 
                 ImGui::Spacing(); ImGui::Spacing();
                 ImGui::Text("CELL SIGNAL LTE");
                 ImGui::Separator();
                 ImGui::Text("Level: %d", signal->level.load());
-                ImGui::Text("CQI:   %d", signal->cqi.load());
-                ImGui::Text("RSRP:  %d", signal->rsrp.load());
-                ImGui::Text("RSRQ:  %d", signal->rsrq.load());
-                ImGui::Text("RSSI:  %d", signal->rssi.load());
+                ImGui::Text("CQI: %d", signal->cqi.load());
+                ImGui::Text("RSRP: %d", signal->rsrp.load());
+                ImGui::Text("RSRQ: %d", signal->rsrq.load());
+                ImGui::Text("RSSI: %d", signal->rssi.load());
                 ImGui::Text("RSSNR: %d", signal->rssnr.load());
 
                 ImGui::Spacing(); ImGui::Spacing(); ImGui::Separator();
